@@ -43,7 +43,7 @@ void matVecMult(Matrix A, Matrix B, Matrix C, int rows, int cols) {
 }
 
 //instruction level parallelism by performing 2 operations in each loop instead of 1
-//unsuccessful; merely adds time to compute. Likely due to OFast already implementing unrolling in 
+//unsuccessful; merely adds time to compute. Likely due to OFast already implementing unrolling automatically 
 void matVecMultParallelInstruction(Matrix A, Matrix B, Matrix C, int rows, int cols){
   for(int k = 0; k < cols; k++){
     double cache_b = B[k];
@@ -62,7 +62,7 @@ void matVecMultParallelInstruction(Matrix A, Matrix B, Matrix C, int rows, int c
 }
 
 
-//Experiment 1: save matrix b's value
+//Experiment 1: save matrix b's value at i,k to reduce calls to load it
 //Successful speedup 
 void matVecMultCache(Matrix A, Matrix B, Matrix C, int rows, int cols){
   for(int k = 0; k<cols; k++){
@@ -73,30 +73,41 @@ void matVecMultCache(Matrix A, Matrix B, Matrix C, int rows, int cols){
   }
 }
 
+//Experiment 2: Locality. We need to call our matrix in row major order or else we'll miss the cache
+void matVecMultCacheLocal(Matrix A, Matrix B, Matrix C, int rows, int cols){
+  for(int i = 0; i<rows; i++){
+    for(int k = 0; k<cols; k++){
+      C[i] += A[i*cols + k] * B[k];
+    }
+  }
+}
+
 //Insight: we can do something similar to help cache A -- it references data that is non local (i*cols doesn't access sequentially)
+//Insight: we can spin off multiple threads to handle the data bottleneck
 //helper function for experiment below
-//Return a row vector that can be scanned sequentially
-double* getRow(Matrix A, int k, int cols){
-  double* rtnPtr = malloc(cols*sizeof(double));
+//Return a col vector that can be scanned sequentially
+double* getCol(Matrix A, int k, int rows, int cols){
+  double* rtnPtr = malloc(rows*sizeof(double));
   
-  for(int i = 0; i < cols; i++){
+  for(int i = 0; i < rows; i++){
     rtnPtr[i] = A[i*cols + k];
   }
   
   return rtnPtr;
 }
 
-//caching the next step in memory as a form of instruction parallelism; reduced need to reload B[k]
+//caching the next step in memory as a form of instruction parallelism; reduced need to
 //result: dramatic speedup
 void matVecMultCacheLocality(Matrix A, Matrix B, Matrix C, int rows, int cols){
-  for(int k=0;k<cols;k++){
+  
+  for(int k = 0; k < cols; k++){
     double cache_b = B[k];
-    double* rowCopy = malloc(rows*sizeof(double));
-    rowCopy = getRow(A,k,cols);
+    double* colCopy = getCol(A,k,rows,cols);
+    
     for(int i = 0; i < rows; i++){
-      C[i] += rowCopy[i] * cache_b;
+      C[i] += colCopy[i] * cache_b;
     }
-    free(rowCopy);
+    free(colCopy);
   }
 }
 
@@ -150,22 +161,17 @@ int main(int argc, char** argv) {
     t_exp2 = t_exp2/3;
     // Print results
     // Print Control
-    printf("Unoptimized Control, Avg of 3 Trials\n");
-    printf("\nTime = %g us\n", t);
-    printf("Timer Resolution = %g us\n", getMicrotimeResolution());
-    printf("Performance = %g Gflop/s\n", 2.0 * n * m * 1e-3 / t);
-    printf("C[N/2] = %g\n\n", (double)C[n / 2]);
-    
-    printf("Caching B\n");
-    printf("\nTime = %g us \n", t_exp1);
-    printf("Timer Resolution = %g us \n", getMicrotimeResolution());
-    printf("Performance = %g Gflop/s\n", 2.0 * n * m * 1e-3/t_exp1);
-    printf("C[N/2] = %g\n\n", (double)C[n/2]);
-
-    printf("Caching B and A\n");
-    printf("\nTime = %g us \n", t_exp2);
-    printf("Performance = %g Gflop/s\n", 2.0 * n * m * 1e-3/t_exp2);
-    printf("C[N/2] = %g\n\n", (double)C[n/2]);
+ 
+    FILE* file = fopen("results.csv", "a");
+    if (file == NULL) {
+        fprintf(stderr, "Could not open file %s for writing\n", "results.csv");
+        exit(EXIT_FAILURE);
+    }
+    fprintf(file,"Experiment,ProblemSize,Time (us)\n");
+    fprintf(file,"Control,%d,%g\n",problemSizes[i],t);
+    fprintf(file,"CacheB,%d,%g\n",problemSizes[i],t_exp1);
+    fprintf(file,"RowMajor,%d,%g\n",problemSizes[i],t_exp2);
+    fclose(file);
     freeMatrix(A);
     freeMatrix(B);
     freeMatrix(C);
