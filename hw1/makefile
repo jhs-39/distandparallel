@@ -1,14 +1,14 @@
 CC=gcc
-CFLAG= -Wall -I. -O0
+CFLAG= -Wall -I. -O3
 
-TARGETS=unoptimized # add your target here
+TARGETS=optimized # add your target here
 
 all: $(TARGETS)
 
-unoptimized: unoptimized.o microtime.o
+optimized: optimized.o microtime.o
 	$(CC) -o $@ $^
 
-unoptimized.o: unoptimized.c microtime.h
+optimized.o: optimized.c microtime.h
 	$(CC) $(CFLAG) -c $<
 
 microtime.o: microtime.c microtime.h
