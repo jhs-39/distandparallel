@@ -1,7 +1,7 @@
-//This File runs 2 different optimization experiments on matrix-vector multiplication by CPU
-//The first attempts instruction-level parallelism with unrolling
-//The second caches values of matrix B to prevent re-loading them
-
+//This File experiments with runtime speed up for matrix vector multiplication
+//Major speedup is realized with applying locality rules -- since the 1d matrix representation is intialized row-major, it must be read row-major
+//in order to satisfy locality
+//Author: Jacob Sander, course 5522 
 #include <microtime.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -45,25 +45,19 @@ void matVecMult(Matrix A, Matrix B, Matrix C, int rows, int cols) {
 //instruction level parallelism by performing 2 operations in each loop instead of 1
 //unsuccessful; merely adds time to compute. Likely due to OFast already implementing unrolling automatically 
 void matVecMultParallelInstruction(Matrix A, Matrix B, Matrix C, int rows, int cols){
-  for(int k = 0; k < cols; k++){
-    double cache_b = B[k];
+  for(int i = 0; i < rows; i++){
     
     //unroll 2 operations inside for loop
-    for (int i = 0; i < rows - 1; i += 2) {
-      C[i] += A[i * cols + k] * cache_b;
-      C[i + 1] += A[(i + 1) * cols + k] * cache_b;
-    }
-    
-    //Handle last col if odd
-    if (rows % 2 != 0) {
-      C[rows - 1] += A[(rows - 1) * cols + k] * cache_b;
+    for (int k = 0; k < cols - 1; k += 2) {
+      C[k] += A[i * cols + k] * B[k];
+      C[k + 1] += A[i * cols + k + 1] * B[k+1];
     }
   }
 }
 
 
 //Experiment 1: save matrix b's value at i,k to reduce calls to load it
-//Successful speedup 
+//Successful speedup, modest 
 void matVecMultCache(Matrix A, Matrix B, Matrix C, int rows, int cols){
   for(int k = 0; k<cols; k++){
     double cache_b = B[k];
@@ -83,7 +77,6 @@ void matVecMultCacheLocal(Matrix A, Matrix B, Matrix C, int rows, int cols){
 }
 
 //Insight: we can do something similar to help cache A -- it references data that is non local (i*cols doesn't access sequentially)
-//Insight: we can spin off multiple threads to handle the data bottleneck
 //helper function for experiment below
 //Return a col vector that can be scanned sequentially
 double* getCol(Matrix A, int k, int rows, int cols){
@@ -96,21 +89,22 @@ double* getCol(Matrix A, int k, int rows, int cols){
   return rtnPtr;
 }
 
-//caching the next step in memory as a form of instruction parallelism; reduced need to
-//result: dramatic speedup
-void matVecMultCacheLocality(Matrix A, Matrix B, Matrix C, int rows, int cols){
+//Experiment 3: get column of matrix so that future references have sequential access
+//dead end experiment - no speedup
+void matVecMultCacheLocalityV2(Matrix A, Matrix B, Matrix C, int rows, int cols){
   
-  for(int k = 0; k < cols; k++){
+  for(int k = 0; k < rows; k++){
     double cache_b = B[k];
     double* colCopy = getCol(A,k,rows,cols);
     
-    for(int i = 0; i < rows; i++){
+    for(int i = 0; i < cols; i++){
       C[i] += colCopy[i] * cache_b;
     }
     free(colCopy);
   }
 }
 
+//take 3 arguments for three different experiment sizes of matrices
 int main(int argc, char** argv) {
   
   if (argc != 4){
@@ -126,7 +120,7 @@ int main(int argc, char** argv) {
     int n, m, p = 1;
     Matrix A, B, C;
     double t, time1, time2 = 0;
-    double t_exp1, t_exp2 = 0;
+    double t_exp1, t_exp2, t_exp3 = 0;
     
     n = problemSizes[i];
     m = problemSizes[i];
@@ -152,13 +146,19 @@ int main(int argc, char** argv) {
       t_exp1 = t_exp1 + (time2 - time1);
 
       time1 = microtime();
-      matVecMultCacheLocality(A,B,C,n,m);
+      matVecMultCacheLocal(A,B,C,n,m);
       time2 = microtime();
       t_exp2 = t_exp2 + (time2 - time1);
+
+      time1 = microtime();
+      matVecMultParallelInstruction(A,B,C,n,m);
+      time2 = microtime();
+      t_exp3 = t_exp3 + (time2 - time1);
     }
     t = t/3;
     t_exp1 = t_exp1/3;
     t_exp2 = t_exp2/3;
+    t_exp3 = t_exp3/3;
     // Print results
     // Print Control
  
@@ -171,6 +171,7 @@ int main(int argc, char** argv) {
     fprintf(file,"Control,%d,%g\n",problemSizes[i],t);
     fprintf(file,"CacheB,%d,%g\n",problemSizes[i],t_exp1);
     fprintf(file,"RowMajor,%d,%g\n",problemSizes[i],t_exp2);
+    fprintf(file,"ParallelInstruct,%d,%g\n",problemSizes[i],t_exp3);
     fclose(file);
     freeMatrix(A);
     freeMatrix(B);
