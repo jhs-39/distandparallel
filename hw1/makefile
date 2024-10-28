@@ -1,5 +1,5 @@
 CC=gcc
-CFLAG= -Wall -I. -O3
+CFLAG= -Wall -I. -Ofast -march=native
 
 TARGETS=optimized # add your target here
 

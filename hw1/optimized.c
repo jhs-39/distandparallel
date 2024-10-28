@@ -27,7 +27,7 @@ void initMatrix(Matrix A, int rows, int cols) {
     for (j = 0; j < cols; j++) A[i * cols + j] = 1.0 / (i + j + 2);
 }
 
-// This can be improved!
+//The unimproved control
 void matVecMult(Matrix A, Matrix B, Matrix C, int rows, int cols) {
   int i, k;
 
@@ -38,14 +38,22 @@ void matVecMult(Matrix A, Matrix B, Matrix C, int rows, int cols) {
       C[i] += A[i * cols + k] * B[k];
 }
 
+//instruction level parallelism by performing 2 operations in each loop instead of 1
 void matVecMultParallelInstruction(Matrix A, Matrix B, Matrix C, int rows, int cols){
-//instruction level parallelism by performing 4 operations in each loop instead of 1
   for(int k = 0; k < cols; k++){
-    for (int i = 0; i < rows; i += 4) {
+    for (int i = 0; i < rows; i += 2) {
       C[i] += A[i * cols + k] * B[k];
       if (i + 1 < rows) C[i + 1] += A[(i + 1) * cols + k] * B[k];
-      if (i + 2 < rows) C[i + 2] += A[(i + 2) * cols + k] * B[k];
-      if (i + 3 < rows) C[i + 3] += A[(i + 3) * cols + k] * B[k];
+    }
+  }
+}
+
+//caching the next step in memory as a form of instruction parallelism; reduced need to reload B[k]
+void matVecMultCache(Matrix A, Matrix B, Matrix C, int rows, int cols){
+  for(int k=0;k<cols;k++){
+    double cache_b = B[k];
+    for(int i = 0; i < rows; i++){
+      C[i] += A[i*cols + k] * cache_b;
     }
   }
 }
@@ -64,8 +72,9 @@ int main(int argc, char** argv) {
   for(int i = 0; i < 3; i++){
     int n, m, p = 1;
     Matrix A, B, C;
-    double t, time1, time2;
-    double t_exp1, t_exp2;
+    double t, time1, time2 = 0;
+    double t_exp1, t_exp2 = 0;
+    
     n = problemSizes[i];
     m = problemSizes[i];
 
@@ -88,9 +97,15 @@ int main(int argc, char** argv) {
       matVecMultParallelInstruction(A,B,C,n,m);
       time2 = microtime();
       t_exp1 = t_exp1 + (time2 - time1);
+
+      time1 = microtime();
+      matVecMultCache(A,B,C,n,m);
+      time2 = microtime();
+      t_exp2 = t_exp2 + (time2 - time1);
     }
     t = t/3;
     t_exp1 = t_exp1/3;
+    t_exp2 = t_exp2/3;
     // Print results
     // Print Control
     printf("Unoptimized Control, Avg of 3 Trials\n");
@@ -103,6 +118,11 @@ int main(int argc, char** argv) {
     printf("\nTime = %g us \n", t_exp1);
     printf("Timer Resolution = %g us \n", getMicrotimeResolution());
     printf("Performance = %g Gflop/s\n", 2.0 * n * m * 1e-3/t_exp1);
+    printf("C[N/2] = %g\n\n", (double)C[n/2]);
+
+    printf("Caching B\n");
+    printf("\nTime = %g us \n", t_exp2);
+    printf("Performance = %g Gflop/s\n", 2.0 * n * m * 1e-3/t_exp2);
     printf("C[N/2] = %g\n\n", (double)C[n/2]);
     freeMatrix(A);
     freeMatrix(B);
