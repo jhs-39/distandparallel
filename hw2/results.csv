@@ -1,44 +1,49 @@
-Experiment,ProblemSize,Time (us)
-Control,5000,29136.7
-CacheB,5000,24571.7
-RowMajor,5000,44746.3
-00,2.07517e+06
-Experiment,ProblemSize,Time (us)
-Control,5000,29420
-CacheB,5000,24606
-RowMajor,5000,44665
-Experiment,ProblemSize,Time (us)
-Control,10000,131113
-CacheB,10000,125412
-RowMajor,10000,157486
-Experiment,ProblemSize,Time (us)
-Control,20000,2.02349e+06
-CacheB,20000,1.0746e+06
-RowMajor,20000,2.29979e+06
-Experiment,ProblemSize,Time (us)
-Control,5000,29706
-CacheB,5000,26033.7
-RowMajor,5000,13541
-Experiment,ProblemSize,Time (us)
-Control,10000,132582
-CacheB,10000,136037
-RowMajor,10000,48005.3
-Experiment,ProblemSize,Time (us)
-Control,20000,2.30004e+06
-CacheB,20000,1.25157e+06
-RowMajor,20000,156603
-Experiment,ProblemSize,Time (us)
-Control,5000,28725.3
-CacheB,5000,23879.3
-RowMajor,5000,12580.7
-ParallelInstruct,5000,12611.7
-Experiment,ProblemSize,Time (us)
-Control,10000,130178
-CacheB,10000,136534
-RowMajor,10000,54566.6
-ParallelInstruct,10000,48205.3
-Experiment,ProblemSize,Time (us)
-Control,20000,1.96838e+06
-CacheB,20000,999716
-RowMajor,20000,150184
-ParallelInstruct,20000,151805
+Experiment,ProblemSize,NumberThreads,Time (us)
+Unoptimized,5000,1,28809.7
+RowMajor,5000,1,30996.7
+WeakOpenMP,5000,1,52626.7
+StrongOpenMP,5000,1,144952
+Unoptimized,5000,2,29038.7
+RowMajor,5000,2,30940.3
+WeakOpenMP,5000,2,30916.7
+StrongOpenMP,5000,2,32127
+Unoptimized,5000,4,24196.7
+RowMajor,5000,4,30496
+WeakOpenMP,5000,4,42275
+StrongOpenMP,5000,4,35738.3
+Unoptimized,5000,8,21837.3
+RowMajor,5000,8,29835.7
+WeakOpenMP,5000,8,40321.7
+StrongOpenMP,5000,8,37412
+Unoptimized,10000,1,75665.3
+RowMajor,10000,1,121508
+WeakOpenMP,10000,1,187133
+StrongOpenMP,10000,1,264802
+Unoptimized,10000,2,78168.3
+RowMajor,10000,2,122229
+WeakOpenMP,10000,2,120369
+StrongOpenMP,10000,2,124214
+Unoptimized,10000,4,75597.3
+RowMajor,10000,4,120602
+WeakOpenMP,10000,4,133236
+StrongOpenMP,10000,4,131869
+Unoptimized,10000,8,74873.3
+RowMajor,10000,8,120268
+WeakOpenMP,10000,8,133582
+StrongOpenMP,10000,8,137061
+Unoptimized,20000,1,1.07609e+06
+RowMajor,20000,1,488036
+WeakOpenMP,20000,1,636203
+StrongOpenMP,20000,1,833037
+Unoptimized,20000,2,1.00138e+06
+RowMajor,20000,2,480274
+WeakOpenMP,20000,2,478981
+StrongOpenMP,20000,2,487428
+Unoptimized,20000,4,1.00318e+06
+RowMajor,20000,4,481444
+WeakOpenMP,20000,4,500474
+StrongOpenMP,20000,4,508386
+Unoptimized,20000,8,1.00504e+06
+RowMajor,20000,8,481904
+WeakOpenMP,20000,8,493475
+StrongOpenMP,20000,8,518329

@@ -1,18 +1,18 @@
 CC=gcc
-CFLAG= -Wall -I. -Ofast -march=native
+CFLAGS= -g -Wall -fopenmp -I. -O3 -march=native
 
 TARGETS=optimized # add your target here
 
 all: $(TARGETS)
 
 optimized: optimized.o microtime.o
-	$(CC) -o $@ $^
+	$(CC) -fopenmp -o $@ $^
 
 optimized.o: optimized.c microtime.h
-	$(CC) $(CFLAG) -c $<
+	$(CC) $(CFLAGS) -c $<
 
 microtime.o: microtime.c microtime.h
-	$(CC) $(CFLAG) -c $<
+	$(CC) $(CFLAGS) -c $<
 
 # Add your rules here.
 # Example: code in opt1.c
