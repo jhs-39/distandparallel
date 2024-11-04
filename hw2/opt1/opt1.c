@@ -1,6 +1,6 @@
 //This File experiments with runtime speed up for matrix vector multiplication
 //HW 2: OpenMP
-//in order to satisfy locality
+//Opt1: Apply threading to rows
 //Author: Jacob Sander, course 5522 
 #include <microtime.h>
 #include <stdio.h>
@@ -41,27 +41,7 @@ void closeExperiment(Matrix A, Matrix B, Matrix C){
   freeMatrix(C);
 }
 
-//The unimproved control
-void matVecMult(Matrix A, Matrix B, Matrix C, int rows, int cols) {
-  int i, k;
-
-  for (k = 0; k < cols; k++)
-    for (i = 0; i < rows; i++)
-      C[i] += A[i * cols + k] * B[k];
-}
-
-//Experiment from HW1: Locality. We need to call our matrix in row major order or else we'll miss the cache
-//Result: major speedup
-void rowMajor(Matrix A, Matrix B, Matrix C, int rows, int cols){
-
-  for(int i = 0; i < rows; i++){
-    for(int k = 0; k < cols; k++){
-      C[i] += A[i*cols + k] * B[k];
-    }
-  }
-}
-
-//Experiment HW2: Weak Optimized. I theorize that using OpenMP on the row level will constitute a weak speedup
+//Experiment HW2: Weak Optimized. I theorize that using OpenMP on the row level will constitute a weak speedup as it is less parallel than calling it more often on the column loops
 //Results: 
 void WeakOpenMP(Matrix A, Matrix B, Matrix C, int rows, int cols, int numThreads){
   //initialize iterators outside threading for proper scope
@@ -77,24 +57,6 @@ void WeakOpenMP(Matrix A, Matrix B, Matrix C, int rows, int cols, int numThreads
   }
 }
 
-//Experiment HW2: Strong Optimized. I theorize that using OpenMP on the column level will constitute a strong speedup
-//There are more opporuntities to take advantage of parallel ops the more often the threads are applied
-//Results:
-void StrongOpenMP(Matrix A, Matrix B, Matrix C, int rows, int cols, int numThreads){
-  int i = 0, k = 0;
-
-  for(i = 0; i < rows; i++){
-    double rowTemp = 0;
-#pragma omp parallel for num_threads(numThreads) default(none) private(k) shared(A,B,i,rows,cols) reduction(+:rowTemp)
-    for(k = 0; k < cols; k++){
-      rowTemp += A[i*cols + k] * B[k];
-    }
-
-    //After threads rejoin due to reduction, can safely assign to C[i]
-    C[i] = rowTemp;
-  }
-}
-
 //take 3 arguments for three different experiment sizes of matrices
 int main(int argc, char** argv) {
   
@@ -106,6 +68,7 @@ int main(int argc, char** argv) {
   for (int i = 0; i < 3; i++) {
     problemSizes[i] = atoi(argv[i + 1]);
   }
+  //try 4 different numbers of threads
   int numThreads[4];
   int threadNum = 1;
   for(int i = 0; i < 4; i++){
@@ -114,12 +77,12 @@ int main(int argc, char** argv) {
   }
 
   //prepare results file
-  FILE* file = fopen("results.csv", "w");
+  FILE* file = fopen("results_opt1.csv", "w");
   if (file == NULL) {
     fprintf(stderr, "Could not open file %s for writing\n", "results.csv");
     exit(EXIT_FAILURE);
   }
-  fprintf(file,"Experiment,ProblemSize,NumberThreads,Time (us),ErrorCheck\n");
+  fprintf(file,"Experiment,ProblemSize,NumberThreads,Time (us),tSerial (us),ErrorCheck\n");
   fclose(file);
   
   //Loop through job sizes
@@ -130,6 +93,7 @@ int main(int argc, char** argv) {
     int m = problemSizes[i];
     //width of vector
     int p = 1;
+    double tSerial = 0;
 
     //Matrix init for this job size
     Matrix A,B,C;
@@ -143,56 +107,33 @@ int main(int argc, char** argv) {
 
     //loop through number threads
     for(int j = 0; j < 4; j++){
-      //exectution time for each experiment. time1 and time2 are start and end times for each test
-      double t=0, time1=0, time2=0, t_exp1=0, t_exp2=0, t_exp3=0;
+      //exectution time for experiment. Make sure to record tserial for later calculations
+      double t=0, time1=0, time2=0;
       //check C[n/2] to make sure optimizations haven't affected what number we calculate
-      double errorcheck_control=0, errorcheck_rowmajor=0, errorcheck_weakmp=0, errorcheck_strongmp=0;
-      //run experiments ten times and take average
-      for(int k = 0; k < 10; k++){
-        //control run 
-        time1 = microtime();
-        matVecMult(A,B,C,n,m);
-        time2 = microtime();
-        t = t + (time2 - time1);
-	errorcheck_control = (double) C[n/2];
-        memset(C,0,n*sizeof(C[0]));
-	//row major order run
-        time1 = microtime();
-        rowMajor(A,B,C,n,m);
-        time2 = microtime();
-        t_exp1 = t_exp1 + (time2 - time1);
-	errorcheck_rowmajor = (double) C[n/2];
-        memset(C,0,n*sizeof(C[0]));
+      double errorcheck=0;
+      //run experiments three times and take average
+      for(int k = 0; k < 3; k++){
 	//parallelize row ops
         time1 = microtime();
-        WeakOpenMP(A,B,C,n,m,j);
+        WeakOpenMP(A,B,C,n,m,numThreads[j]);
         time2 = microtime();
-        t_exp2 = t_exp2 + (time2 - time1);
-	errorcheck_weakmp = (double) C[n/2];
-        memset(C,0,n*sizeof(C[0]));
-	//parallelize column ops
-        time1 = microtime();
-        StrongOpenMP(A,B,C,n,m,j);
-        time2 = microtime();
-        t_exp3 = t_exp3 + (time2 - time1);
-	errorcheck_strongmp = (double) C[n/2];
-	memset(C,0,n*sizeof(C[0]));
+        t = t + (time2 - time1);
+	errorcheck = (double) C[n/2];
       }
-      t = t/10;
-      t_exp1 = t_exp1/10;
-      t_exp2 = t_exp2/10;
-      t_exp3 = t_exp3/10;
+      t = t/3;
+
+      //record tserial if threads == 1
+      if(numThreads[j] == 1){
+      	tSerial = t;
+      }
 
       // Print results for this problem size and thread number
-      FILE* file = fopen("results.csv", "a");
+      FILE* file = fopen("results_opt1.csv", "a");
       if (file == NULL) {
         fprintf(stderr, "Could not open file %s for appending\n", "results.csv");
         exit(EXIT_FAILURE);
       }
-      fprintf(file,"Unoptimized,%d,%d,%g,%g\n",problemSizes[i],numThreads[j],t,errorcheck_control);
-      fprintf(file,"RowMajor,%d,%d,%g,%g\n",problemSizes[i],numThreads[j],t_exp1,errorcheck_rowmajor);
-      fprintf(file,"WeakOpenMP,%d,%d,%g,%g\n",problemSizes[i],numThreads[j],t_exp2,errorcheck_weakmp);
-      fprintf(file,"StrongOpenMP,%d,%d,%g,%g\n",problemSizes[i],numThreads[j],t_exp3,errorcheck_strongmp);
+      fprintf(file,"RowOpenMP,%d,%d,%g,%g,%g,\n",problemSizes[i],numThreads[j],t,tSerial,errorcheck);
       fclose(file);
    }
 
