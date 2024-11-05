@@ -7,10 +7,13 @@ int main(int argc, char** argv) {
   int i, size = 100000000;
   float *A, *B, *C;
   double sum = 0.0;
-
+  //256 bit / 32 byte registers used by default on hmcse server
+  alignment = 32;
   // TODO Allocated aligned memory for A, B, and C
-  
-  
+  posix_memalign((void**)&A, alignment, size*sizeof(float))
+  posix_memalign((void**)&B, alignment, size*sizeof(float))
+  posix_memalign((void**)&C, alignment, size*sizeof(float))
+
   //begin intialization
   if ((A == 0) || (B == 0) || (C == 0)) {
     fprintf(stderr, "Memory allocation failed in file %s, line %d\n", __FILE__,
