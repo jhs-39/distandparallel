@@ -1,0 +1,66 @@
+//This file runs a 2d Ising Model in parallel and serial implementations
+//3 tasks include
+#include <stdio.h>
+#include <stdlib.h>
+#include <math.h>
+#include <time.h>
+#include "ising_model.h"
+#include "ising_openmp_taskparallel.h"
+#include <omp.h>
+#include <microtime.h>
+
+
+int main() {
+    srand(time(NULL));
+    
+    //size of square 2d lattice
+    int L;
+    printf("Please enter the size L of a desired LxL Lattice: \n");
+    scanf("%d", &L);
+
+    //how many MonteCarlo steps are used in a discrete step
+    int STEPS;
+    printf("Enter number of steps to use in Monte Carlo simulation of lattice: \n");
+    scanf("%d", &STEPS);
+    
+    //number threads to test
+    int num_threads[] = {1, 2, 4, 8};
+    //measured runtimes
+    double times[] = {0,0,0,0};
+
+    //variables for storing run time
+    double start, end;
+
+    //create the lattice, initializing all spins to +1
+    int lattice[L][L];
+    initialize_lattice(lattice,L);
+
+    //print initial configuration
+    printf("Initial Lattice:\n");
+    print_lattice(lattice,L);
+
+    //simulate the Ising model using Metropolis algorithm
+    //serial metropolis
+
+    start = microtime();
+    
+    end = microtime();
+
+    //openmp multithread; task parallelism with time release of lock
+    for(int i = 0; i < 4; i++){
+      start = microtime();
+      ising_openmp_taskparallel(lattice, L, STEPS);
+      end = microtime();
+      times[i] = end - start;
+    }
+    //openmp mulithread; data parallelism to minimize collision and locking of threads
+
+
+    //mpi multithread; message passing the mutex lock and localizing regions of data
+    
+    //print results of run to .csv
+    
+
+
+    return 0;
+}
