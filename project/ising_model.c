@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <omp.h>
+#include "microtime.h"
 #include "ising_model.h"
 
 // Function to initialize the lattice with random spins
@@ -88,7 +89,7 @@ void naive_metropolis(int **lattice, int L, double T, int steps, int num_threads
 //acquire locks on lattice site and all neighbors
 //return 1 if successful
 int getLocks(omp_lock_t **locks, int L, int x, int y){
-  
+   //integer indicating if all locks are acquired
    int lock_acquired = 1;
 
     // Try to acquire all locks
@@ -113,10 +114,12 @@ int getLocks(omp_lock_t **locks, int L, int x, int y){
     }
 
     // If not all locks were acquired, release any acquired locks and return 0
-    for (int i = 0; i < 5; i++) {
-        if (locks_acquired[i]) {
-            omp_unset_lock(&locks[(i == 0) ? x : (i == 1) ? (x - 1 + L) % L : (i == 2) ? (x + 1 + L) % L : (i == 3) ? x : (i == 4) ? x : x][(i == 1 || i == 2) ? y : (i == 3 || i == 4) ? (y - 1 + L) % L : (y + 1 + L) % L]); 
-        }
+    if (!lock_acquired){
+      if (locks_acquired[0]) omp_unset_lock(&locks[x][y]);
+      if (locks_acquired[1]) omp_unset_lock(&locks[(x - 1 + L) % L][y]);
+      if (locks_acquired[2]) omp_unset_lock(&locks[(x + 1 + L) % L][y]);
+      if (locks_acquired[3]) omp_unset_lock(&locks[x][(y - 1 + L) % L]);
+      if (locks_acquired[4]) omp_unset_lock(&locks[x][(y + 1 + L) % L]);
     }
     
     return 0;  // Not all locks were acquired
@@ -124,12 +127,12 @@ int getLocks(omp_lock_t **locks, int L, int x, int y){
 
 //Metropolis that locks neighbors for race condition; used for multithreading
 //includes time release locks
-void locking_metropolis(int **lattice, int L, double T, int x, int y, omp_lock_t **locks){
-    
+int locking_metropolis(int **lattice, int L, double T, int x, int y, omp_lock_t **locks){
+    int success = 0;    
+
     //lock lattice site and neighbors. lattice edges are treated 'wrap around' to opposite edge (top to bottom, left to right)
-    
     double start_time = omp_get_wtime();  // Record start time
-    double timeout = .00000001; //timeout time to release lock and try somewhere else
+    double timeout = .000001; //1 us timeout time to release lock and try somewhere else
     int locked = 0;
 
     // Try acquiring the lock until timeout
@@ -144,16 +147,20 @@ void locking_metropolis(int **lattice, int L, double T, int x, int y, omp_lock_t
       }
     }
 
-    metropolis(lattice, L, T, x, y);
+    if(locked){
+      metropolis(lattice, L, T, x, y);
 
-    //unlock neighbor locks
-    omp_unset_lock(&locks[(x - 1 + L)%L][y]);
-    omp_unset_lock(&locks[(x + 1 + L)%L][y]);
-    omp_unset_lock(&locks[x][(y - 1 + L)%L]);
-    omp_unset_lock(&locks[x][(y + 1 + L)%L]);
+      //unlock neighbor locks
+      omp_unset_lock(&locks[(x - 1 + L)%L][y]);
+      omp_unset_lock(&locks[(x + 1 + L)%L][y]);
+      omp_unset_lock(&locks[x][(y - 1 + L)%L]);
+      omp_unset_lock(&locks[x][(y + 1 + L)%L]);
     
-    //unlock lattice site
-    omp_unset_lock(&locks[x][y]);
+      //unlock lattice site
+      omp_unset_lock(&locks[x][y]);
+      success = 1;
+    }
+    return success;
 }
 
 //for data parallelism, only lock on boundaries of sublattice to save time
@@ -161,15 +168,17 @@ int boundary_metropolis(int **lattice, int L, double T, int i_bound, int i_block
   //int i = random_int(i_bound, i_bound + i_block_size - 1);
   //int j = random_int(j_bound, j_bound + j_block_size - 1);
   //seed unique based on region -- unique to each thread
-  int i = (rand_r(&seed) % i_block_size) + i_bound;
+  int i = (rand_r(&seed) % (i_block_size)) + i_bound;
   int j = (rand_r(&seed) % j_block_size) + j_bound;
 
-  int iBoundTest = (i - i_bound) % i_block_size;
-  int jBoundTest = (j - j_bound) % j_block_size;
+  int iBoundTest = (i - i_bound) % (i_block_size-1);
 
   //if on boundary, lock all neighbors and self due to risk of collision
-  if((iBoundTest == 0) || (jBoundTest == 0)){
-    locking_metropolis(lattice, L, T, i, j, locks);
+  if((iBoundTest == 0)){
+    int success = 0;
+    do{
+      success = locking_metropolis(lattice, L, T, i, j, locks);
+    }while(success == 0);
   }else{
     metropolis(lattice, L, T, i, j);
   }
@@ -195,10 +204,14 @@ int collisionTest(int **workingSites, int L, int i, int j){
 //assumption; lattice has been split into row major strips using i_bound and j_bound
 int signal_metropolis(int **lattice, int L, double T, int i_bound, int i_block_size, int j_bound, int j_block_size, unsigned int seed, int **workingSites){
   //printf("Debug: Signal Metropolis\n\n");
+  seed += microtime();
   int i = (rand_r(&seed) % i_block_size) + i_bound;
+  seed += microtime();
   int j = (rand_r(&seed) % j_block_size);
   //printf("I: %d J: %d\n\n",i,j);
-  int iBoundTest = (i - i_bound) % i_block_size;
+  int iBoundTest = (i - i_bound) % (i_block_size - 1);
+
+  int locked = 0;
 
   //if on vertical boundary of strip, make sure no other threads are looking at same data
   if(iBoundTest == 0){
@@ -208,14 +221,20 @@ int signal_metropolis(int **lattice, int L, double T, int i_bound, int i_block_s
     //look in the working array for adjacency. Since we are in strips for data parallel, only consider vertical adjacency
     if(collisionTest(workingSites, L, i, j) == 1){
       workingSites[i][j] = 1;
+      locked = 1;
     }
 }  
 
   //now 'locked' we can complete metropolis step without fear of interference
-  metropolis(lattice,L,T,i,j);
+  if(locked){
+    metropolis(lattice,L,T,i,j);
+  }
   
   //release work site after completion of metropolis step
+#pragma omp critical
+{
   workingSites[i][j] = 0;
+}
 
   }else{
     //if not on boundary, not in danger of collision -- freely apply
@@ -244,15 +263,20 @@ void ising_openmp_signalparallel(int **lattice, int L, double T, int steps, int 
   blockdim_i = L/num_threads;
   //printf("Debug: beginning of parallel block\n\n");
 
-  #pragma omp parallel for shared(lattice) num_threads(num_threads)
+  #pragma omp parallel shared(lattice) num_threads(num_threads)
+  {
+    int thread_id = omp_get_thread_num();
+    int j_bound = 0;
+    int i_bound = (thread_id * blockdim_i);
+    printf("Thread %d: i_bound = %d, blockdim_i = %d\n", thread_id, i_bound, blockdim_i);
+
     for (int i = 0; i < steps; i++){
       int thread_id = omp_get_thread_num();
       unsigned int seed = i + thread_id;
-      int j_bound = 0;
-      int i_bound = (thread_id * blockdim_i) % L;
       signal_metropolis(lattice,L,T,i_bound,blockdim_i,j_bound,blockdim_j,seed,workingSites);
+      #pragma omp barrier
     }
-
+  }
   //printf("Debug: end of parallel block\n");
 
   for (int i = 0; i < L; i++) {

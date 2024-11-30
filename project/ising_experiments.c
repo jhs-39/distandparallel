@@ -13,15 +13,15 @@ int main() {
     srand(time(NULL));
     
     //size of square 2d lattice
-    int L = 128;
+    int L = 64;
     //printf("Please enter the size L of a desired LxL Lattice: \n");
     //scanf("%d", &L);
     //temperature parameter
-    double T = 2;
+    double T = 10;
     //printf("Please enter temperature parameter. Theoretic critical temp of 2d Ising model is ~2.2\n");
     //scanf("%lf", &T);
     //how many MonteCarlo steps are used in a discrete step
-    int STEPS = 8000000;
+    int STEPS = 800000;
     //printf("Enter number of steps to use in Monte Carlo simulation of lattice: \n");
     //scanf("%d", &STEPS);
     
@@ -43,7 +43,7 @@ int main() {
 
     //print initial configuration
     //printf("Initial Lattice:\n");
-    //print_lattice(lattice,L);
+    print_lattice(lattice,L);
 
     //simulate the Ising model using Metropolis algorithm
     //serial metropolis
@@ -67,6 +67,7 @@ int main() {
       printf("Thread count: %d\n",num_threads[i]);
       printf("Run Time: %f\n", time);
       //print_lattice(lattice,L);
+      if(i==3)print_lattice(lattice,L);
       initialize_lattice(lattice,L);
     }
 
@@ -82,9 +83,11 @@ int main() {
       printf("Thread count: %d\n", num_threads[i]);
       printf("Run Time: %f\n", time);
       //print_lattice(lattice,L);
+      if(i==3)print_lattice(lattice,L);
       initialize_lattice(lattice,L);
     }
     
+
     printf("Data Parallelism Test\n");
 
     //openmp mulithread; data parallelism to minimize collision and locking of threads
@@ -96,10 +99,12 @@ int main() {
       printf("Thread count: %d\n", num_threads[i]);
       printf("Run Time: %f\n", time);
       //print_lattice(lattice,L);
+      if(i==3)print_lattice(lattice,L);
       initialize_lattice(lattice,L);
     }
     
-    printf("Begin Final\n");
+    
+    printf("Begin Data+\n");
     //openmp multithread; dataparallelism without locks; maintains an array to make sure boundaries arent't colliding
     for(int i = 0; i < 4; i++){
       start = microtime();
@@ -109,6 +114,7 @@ int main() {
       printf("Thread count: %d\n",num_threads[i]);
       printf("Run Time: %f\n",time);
       //print_lattice(lattice,L);
+      if(i==3)print_lattice(lattice,L);
       initialize_lattice(lattice,L);
     }
     
