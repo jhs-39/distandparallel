@@ -146,18 +146,19 @@ int locking_metropolis(int **lattice, int L, double T, int x, int y, omp_lock_t 
         locked = 1;  // Lock acquired successfully
       }
     }
-
+    
+    //if locks successful, do metropolis and unlock sites
     if(locked){
       metropolis(lattice, L, T, x, y);
+
+      //unlock lattice site
+      omp_unset_lock(&locks[x][y]);
 
       //unlock neighbor locks
       omp_unset_lock(&locks[(x - 1 + L)%L][y]);
       omp_unset_lock(&locks[(x + 1 + L)%L][y]);
       omp_unset_lock(&locks[x][(y - 1 + L)%L]);
       omp_unset_lock(&locks[x][(y + 1 + L)%L]);
-    
-      //unlock lattice site
-      omp_unset_lock(&locks[x][y]);
       success = 1;
     }
     return success;
@@ -169,18 +170,31 @@ int boundary_metropolis(int **lattice, int L, double T, int i_bound, int i_block
   //int j = random_int(j_bound, j_bound + j_block_size - 1);
   //seed unique based on region -- unique to each thread
   int i = (rand_r(&seed) % (i_block_size)) + i_bound;
+  seed += microtime();
   int j = (rand_r(&seed) % j_block_size) + j_bound;
 
   int iBoundTest = (i - i_bound) % (i_block_size-1);
 
+  //debug
+  if(i < i_bound){
+	  printf("Error: i out of bounds\n");
+  }else if(i > (i_bound + i_block_size)){
+    printf("Error: i above bounds\n");
+  }
+  
+  
   //if on boundary, lock all neighbors and self due to risk of collision
-  if((iBoundTest == 0)){
+  if(iBoundTest == 0){
     int success = 0;
     do{
       success = locking_metropolis(lattice, L, T, i, j, locks);
     }while(success == 0);
   }else{
     metropolis(lattice, L, T, i, j);
+    //debug
+    //if(omp_get_thread_num() == 3){
+      //printf("Thread 3 updated successfully\n");
+    //}
   }
 
   return 1;
@@ -191,9 +205,9 @@ int collisionTest(int **workingSites, int L, int i, int j){
   int collision;
   {
   if((workingSites[(i+1+L)%L][j] == 1) || (workingSites[(i-1+L)%L][j] == 1)){
-    collision = 1;
-  }else{
     collision = 0;
+  }else{
+    collision = 1;
   }
   }
   return collision;
@@ -259,22 +273,23 @@ void ising_openmp_signalparallel(int **lattice, int L, double T, int steps, int 
   int blockdim_i, blockdim_j;
   //all columns in strip for locality
   blockdim_j = L;
-  //subdivide along rows
+  //subdivide along rows; each thread gets equal work
   blockdim_i = L/num_threads;
   //printf("Debug: beginning of parallel block\n\n");
 
   #pragma omp parallel shared(lattice) num_threads(num_threads)
   {
     int thread_id = omp_get_thread_num();
+    
+    //starting index for columns; is all cols
     int j_bound = 0;
+    //starting index for rows for this thread
     int i_bound = (thread_id * blockdim_i);
-    printf("Thread %d: i_bound = %d, blockdim_i = %d\n", thread_id, i_bound, blockdim_i);
-
-    for (int i = 0; i < steps; i++){
-      int thread_id = omp_get_thread_num();
-      unsigned int seed = i + thread_id;
+    //printf("Thread %d: i_bound = %d, blockdim_i = %d\n", thread_id, i_bound, blockdim_i);
+    //printf("Thread %d: processing %d steps\n", thread_id, steps/num_threads);
+    for (int i = 0; i < steps/num_threads; i++){
+      unsigned int seed = i + thread_id + microtime();
       signal_metropolis(lattice,L,T,i_bound,blockdim_i,j_bound,blockdim_j,seed,workingSites);
-      #pragma omp barrier
     }
   }
   //printf("Debug: end of parallel block\n");

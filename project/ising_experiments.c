@@ -21,7 +21,7 @@ int main() {
     //printf("Please enter temperature parameter. Theoretic critical temp of 2d Ising model is ~2.2\n");
     //scanf("%lf", &T);
     //how many MonteCarlo steps are used in a discrete step
-    int STEPS = 800000;
+    int STEPS = 8000000;
     //printf("Enter number of steps to use in Monte Carlo simulation of lattice: \n");
     //scanf("%d", &STEPS);
     
@@ -67,7 +67,7 @@ int main() {
       printf("Thread count: %d\n",num_threads[i]);
       printf("Run Time: %f\n", time);
       //print_lattice(lattice,L);
-      if(i==3)print_lattice(lattice,L);
+      //if(i==3)print_lattice(lattice,L);
       initialize_lattice(lattice,L);
     }
 
@@ -83,7 +83,7 @@ int main() {
       printf("Thread count: %d\n", num_threads[i]);
       printf("Run Time: %f\n", time);
       //print_lattice(lattice,L);
-      if(i==3)print_lattice(lattice,L);
+      //if(i==3)print_lattice(lattice,L);
       initialize_lattice(lattice,L);
     }
     
@@ -99,7 +99,7 @@ int main() {
       printf("Thread count: %d\n", num_threads[i]);
       printf("Run Time: %f\n", time);
       //print_lattice(lattice,L);
-      if(i==3)print_lattice(lattice,L);
+      //if(i==3)print_lattice(lattice,L);
       initialize_lattice(lattice,L);
     }
     
@@ -114,7 +114,7 @@ int main() {
       printf("Thread count: %d\n",num_threads[i]);
       printf("Run Time: %f\n",time);
       //print_lattice(lattice,L);
-      if(i==3)print_lattice(lattice,L);
+      //if(i==3)print_lattice(lattice,L);
       initialize_lattice(lattice,L);
     }
     
